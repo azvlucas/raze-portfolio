@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: raze_ci
+          POSTGRES_PASSWORD: ci_only_password
+          POSTGRES_DB: raze_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U raze_ci -d raze_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://raze_ci:ci_only_password@localhost:5432/raze_ci?schema=public
+      AUTH_SECRET: ci-only-session-secret-with-at-least-32-characters
+      ADMIN_EMAIL: admin@example.test
+      ADMIN_PASSWORD: ci-admin-password-strong
+      SEED_SELLER_EMAIL: seller@example.test
+      SEED_SELLER_PASSWORD: ci-seller-password-strong
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prisma migrate deploy
+      - run: npm run db:seed
+      - run: npm test
+      - run: npm run lint
+      - run: npm run build
